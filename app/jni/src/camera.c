@@ -77,10 +77,10 @@ static SDL_FRect screenRect;
  * @param freeFunc Function pointer to the specific free function to
  *                 deallocate the memory.
  */
-void free_memory(void* mem, void (*freeFunc)(void*))
+void free_memory(void** mem, void (*freeFunc)(void*))
 {
-    freeFunc(mem);  // Call the specified free function to release the memory
-    mem = NULL;     // Set the pointer to NULL to prevent dangling references
+    freeFunc(*mem);  // Call the specified free function to release the memory
+    *mem = NULL;
 }
 
 /**
@@ -96,22 +96,31 @@ void free_memory(void* mem, void (*freeFunc)(void*))
 void cImage_Destroy(cImage* me)
 {
     // Check if the cImage pointer itself is NULL; if so, exit function early
-    if (me == NULL) return;
+    if (me == NULL)
+    {
+        return;
+    }
 
     // Free the raw image data if it exists
     if (me->data != NULL)
-        free_memory(me->data, free);
+    {
+        free_memory((void **) &me->data, free);
+    }
 
     // Free the mutex if it exists, using SDL_DestroyMutex as the free function
     if (me->mutex != NULL)
-        free_memory(me->mutex, (void (*)(void *)) SDL_DestroyMutex);
+    {
+        free_memory((void **) &me->mutex, (void (*)(void *)) SDL_DestroyMutex);
+    }
 
     // Free the texture if it exists, using SDL_DestroyTexture as the free function
     if (me->texture != NULL)
-        free_memory(me->texture, (void (*)(void *)) SDL_DestroyTexture);
+    {
+        free_memory((void **) &me->texture, (void (*)(void *)) SDL_DestroyTexture);
+    }
 
     // Finally, free the cImage structure itself
-    free_memory(me, free);
+    free_memory((void **) &me, free);
 }
 
 /**
@@ -178,7 +187,7 @@ bool cImage_TextureUpdate(cImage* me)
         // Delete the existing texture if it exists, then create a new one
         if (me->texture != NULL)
         {
-            free_memory(me->texture, (void (*)(void *)) SDL_DestroyTexture);
+            free_memory((void **) me->texture, (void (*)(void *)) SDL_DestroyTexture);
         }
 
         // Create a new texture with updated width and height
@@ -390,7 +399,10 @@ bool cImage_Render(cImage* me, SDL_FRect* parentRect, int orientation)
     bool ret = false;  // Default return value, assuming failure
 
     // Update the texture of the cImage object; exit if update fails
-    if (!cImage_TextureUpdate(me)) goto EXIT;
+    if (!cImage_TextureUpdate(me))
+    {
+        goto EXIT;
+    }
 
     // Calculate the rendering rectangle based on the parent rectangle and orientation
     SDL_FRect rect;
@@ -484,6 +496,12 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         goto EXIT;                    // Exit if initialization fails
     }
 
+    // Initialize a new cImage structure for handling camera textures
+    if (!cImage_New(&image))
+    {
+        goto EXIT;
+    }
+
     // Create an SDL window and renderer for displaying the camera feed
     if (!SDL_CreateWindowAndRenderer("CameraXSDL3", 0, 0, SDL_WINDOW_RESIZABLE, &window, &renderer))
     {
@@ -491,14 +509,17 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[])
         goto EXIT;                    // Exit if creation fails
     }
 
-    // Initialize a new cImage structure for handling camera textures
-    if (!cImage_New(&image)) goto EXIT;
-
     // Get the initial screen orientation and set it in mOrientation
-    if (!getOrientation(&mOrientation)) goto EXIT;
+    if (!getOrientation(&mOrientation))
+    {
+        goto EXIT;
+    }
 
     // Retrieve the screen rectangle dimensions for positioning content
-    if (!getScreenRect(&screenRect)) goto EXIT;
+    if (!getScreenRect(&screenRect))
+    {
+        goto EXIT;
+    }
 
     return SDL_APP_CONTINUE;  // Return success if all initializations complete
 
@@ -530,10 +551,16 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
     if (event->type == SDL_EVENT_WINDOW_RESIZED)
     {
         // Update orientation if the window is resized
-        if (!getOrientation(&mOrientation)) goto EXIT;
+        if (!getOrientation(&mOrientation))
+        {
+            goto EXIT;
+        }
 
         // Update the screen rectangle dimensions based on the new window size
-        if (!getScreenRect(&screenRect)) goto EXIT;
+        if (!getScreenRect(&screenRect))
+        {
+            goto EXIT;
+        }
     }
 
     return SDL_APP_CONTINUE;  // Continue running the program
